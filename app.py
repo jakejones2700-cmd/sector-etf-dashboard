@@ -361,21 +361,21 @@ def build_excel(closes_df, tickers):
         price_df = closes_df[tickers].copy()
         price_df.index = pd.to_datetime(price_df.index).strftime("%Y-%m-%d")
         price_df.index.name = "Date"
-        price_df.columns = [f"{tk} Price" for tk in tickers]
+        price_df.columns = tickers
         price_df.to_excel(writer, sheet_name="Daily Prices")
 
         # Sheet 2: Daily $ Change
         dollar_chg = closes_df[tickers].diff()
         dollar_chg.index = pd.to_datetime(dollar_chg.index).strftime("%Y-%m-%d")
         dollar_chg.index.name = "Date"
-        dollar_chg.columns = [f"{tk} $ Chg" for tk in tickers]
+        dollar_chg.columns = tickers
         dollar_chg.to_excel(writer, sheet_name="Daily $ Change")
 
         # Sheet 3: Daily % Change
         pct_chg = closes_df[tickers].pct_change() * 100
         pct_chg.index = pd.to_datetime(pct_chg.index).strftime("%Y-%m-%d")
         pct_chg.index.name = "Date"
-        pct_chg.columns = [f"{tk} % Chg" for tk in tickers]
+        pct_chg.columns = tickers
         pct_chg.to_excel(writer, sheet_name="Daily % Change")
 
         # Sheet 4: Rebased to 100
@@ -383,7 +383,7 @@ def build_excel(closes_df, tickers):
         rebased = rebased.div(rebased.iloc[0]).mul(100)
         rebased.index = pd.to_datetime(rebased.index).strftime("%Y-%m-%d")
         rebased.index.name = "Date"
-        rebased.columns = [f"{tk} (Base=100)" for tk in tickers]
+        rebased.columns = tickers
         rebased.to_excel(writer, sheet_name="Rebased to 100")
 
         # Sheet 5: Combined long format
