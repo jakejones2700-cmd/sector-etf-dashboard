@@ -401,12 +401,29 @@ def build_excel(closes_df, tickers):
             }))
         pd.concat(frames, ignore_index=True).to_excel(writer, sheet_name="Combined", index=False)
 
-        # Header formatting
+        # Header + number formatting
         from openpyxl.styles import Font, PatternFill, Alignment
         hfont = Font(bold=True, color="FFFFFF")
         hfill = PatternFill("solid", fgColor="1F3864")
+        fmt_num = "0.00"
+        fmt_pct = "0.00%"
         for sname in writer.sheets:
             ws = writer.sheets[sname]
+            is_pct_sheet = sname == "Daily % Change"
+            # Apply number format to all data cells (skip header row and date col)
+            for row in ws.iter_rows(min_row=2):
+                for cell in row:
+                    if cell.column == 1:
+                        continue  # skip Date column
+                    if isinstance(cell.value, (int, float)):
+                        if is_pct_sheet:
+                            cell.number_format = fmt_pct
+                            # pct_change() returns e.g. 1.23 meaning 1.23%, divide by 100 so Excel % format shows correctly
+                            if cell.value is not None:
+                                cell.value = cell.value / 100
+                        else:
+                            cell.number_format = fmt_num
+            # Style headers
             for cell in ws[1]:
                 cell.font = hfont
                 cell.fill = hfill
