@@ -71,10 +71,16 @@ SECTOR_COLORS = {
 }
 
 # ── Time Period Helpers ─────────────────────────────────────────────────────
+def last_trading_close_before(d: date) -> date:
+    """Return the last calendar day before `d` that could be a trading day.
+    We fetch a small window and yfinance will return the last available close."""
+    return d - timedelta(days=1)
+
 def get_period_dates(period: str):
     today = date.today()
     if period == "1D":
-        start = today - timedelta(days=1)
+        # Go back enough to guarantee we get the prior close
+        start = today - timedelta(days=5)
     elif period == "1W":
         start = today - timedelta(weeks=1)
     elif period == "1M":
@@ -84,12 +90,17 @@ def get_period_dates(period: str):
     elif period == "6M":
         start = today - timedelta(days=182)
     elif period == "MTD":
-        start = today.replace(day=1)
+        # Anchor to last close of prior month (day before the 1st)
+        first_of_month = today.replace(day=1)
+        start = last_trading_close_before(first_of_month)
     elif period == "QTD":
+        # Anchor to last close of prior quarter
         q_start_month = ((today.month - 1) // 3) * 3 + 1
-        start = today.replace(month=q_start_month, day=1)
+        first_of_quarter = today.replace(month=q_start_month, day=1)
+        start = last_trading_close_before(first_of_quarter)
     elif period == "YTD":
-        start = today.replace(month=1, day=1)
+        # Anchor to last close of prior year (Dec 31)
+        start = last_trading_close_before(today.replace(month=1, day=1))
     elif period == "1Y":
         start = today - timedelta(days=365)
     elif period == "3Y":
@@ -120,7 +131,13 @@ def fetch_data(tickers: list, start: date, end: date) -> pd.DataFrame:
     closes = closes.dropna(how="all")
     return closes
 
-def calc_return(series: pd.Series) -> float | None:
+def calc_return(series: pd.Series, anchor_last_of_start: bool = False) -> float | None:
+    """
+    anchor_last_of_start=True: used for MTD/QTD/YTD where we fetched a small
+    window ending on the last trading day before the period. We use that window's
+    LAST close as the base, and the series' overall last close as the end.
+    For normal periods, just use first vs last.
+    """
     s = series.dropna()
     if len(s) < 2:
         return None
@@ -324,7 +341,10 @@ def fmt_cell(val):
         return "N/A"
     return f"{'+' if val >= 0 else ''}{val:.2f}%"
 
-styled = summary_df.style.applymap(color_val).format(fmt_cell)
+try:
+    styled = summary_df.style.map(color_val).format(fmt_cell)
+except AttributeError:
+    styled = summary_df.style.applymap(color_val).format(fmt_cell)
 st.dataframe(styled, use_container_width=True, height=430)
 
 # ── Footer ───────────────────────────────────────────────────────────────────
