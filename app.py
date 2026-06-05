@@ -378,7 +378,15 @@ def build_excel(closes_df, tickers):
         pct_chg.columns = [f"{tk} % Chg" for tk in tickers]
         pct_chg.to_excel(writer, sheet_name="Daily % Change")
 
-        # Sheet 4: Combined long format
+        # Sheet 4: Rebased to 100
+        rebased = closes_df[tickers].copy()
+        rebased = rebased.div(rebased.iloc[0]).mul(100)
+        rebased.index = pd.to_datetime(rebased.index).strftime("%Y-%m-%d")
+        rebased.index.name = "Date"
+        rebased.columns = [f"{tk} (Base=100)" for tk in tickers]
+        rebased.to_excel(writer, sheet_name="Rebased to 100")
+
+        # Sheet 5: Combined long format
         frames = []
         for tk in tickers:
             s = closes_df[tk].dropna()
@@ -435,7 +443,7 @@ with col_dl2:
     else:
         st.info("Select at least one ETF above to enable download.")
 
-st.caption("File includes 4 sheets: Daily Prices · Daily $ Change · Daily % Change · Combined")
+st.caption("File includes 5 sheets: Daily Prices · Daily $ Change · Daily % Change · Rebased to 100 · Combined")
 
 # ── Footer ───────────────────────────────────────────────────────────────────
 st.markdown("---")
