@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta, date
 import numpy as np
+import io
 
 st.set_page_config(
     page_title="S&P Sector ETF Dashboard",
@@ -346,6 +347,95 @@ try:
 except AttributeError:
     styled = summary_df.style.applymap(color_val).format(fmt_cell)
 st.dataframe(styled, use_container_width=True, height=430)
+
+
+# ── Excel Download ─────────────────────────────────────────────────────────────────────────
+st.markdown("---")
+st.markdown("### 📥 Download Data")
+
+def build_excel(closes_df, tickers):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+
+        # Sheet 1: Daily Prices
+        price_df = closes_df[tickers].copy()
+        price_df.index = pd.to_datetime(price_df.index).strftime("%Y-%m-%d")
+        price_df.index.name = "Date"
+        price_df.columns = [f"{tk} Price" for tk in tickers]
+        price_df.to_excel(writer, sheet_name="Daily Prices")
+
+        # Sheet 2: Daily $ Change
+        dollar_chg = closes_df[tickers].diff()
+        dollar_chg.index = pd.to_datetime(dollar_chg.index).strftime("%Y-%m-%d")
+        dollar_chg.index.name = "Date"
+        dollar_chg.columns = [f"{tk} $ Chg" for tk in tickers]
+        dollar_chg.to_excel(writer, sheet_name="Daily $ Change")
+
+        # Sheet 3: Daily % Change
+        pct_chg = closes_df[tickers].pct_change() * 100
+        pct_chg.index = pd.to_datetime(pct_chg.index).strftime("%Y-%m-%d")
+        pct_chg.index.name = "Date"
+        pct_chg.columns = [f"{tk} % Chg" for tk in tickers]
+        pct_chg.to_excel(writer, sheet_name="Daily % Change")
+
+        # Sheet 4: Combined long format
+        frames = []
+        for tk in tickers:
+            s = closes_df[tk].dropna()
+            frames.append(pd.DataFrame({
+                "Date": pd.to_datetime(s.index).strftime("%Y-%m-%d"),
+                "Ticker": tk,
+                "Sector": SECTORS.get(tk, ""),
+                "Close Price": s.values,
+                "$ Change": s.diff().values,
+                "% Change": s.pct_change().mul(100).values,
+                "Cumulative Return (%)": (s / s.iloc[0] - 1).mul(100).values,
+            }))
+        pd.concat(frames, ignore_index=True).to_excel(writer, sheet_name="Combined", index=False)
+
+        # Header formatting
+        from openpyxl.styles import Font, PatternFill, Alignment
+        hfont = Font(bold=True, color="FFFFFF")
+        hfill = PatternFill("solid", fgColor="1F3864")
+        for sname in writer.sheets:
+            ws = writer.sheets[sname]
+            for cell in ws[1]:
+                cell.font = hfont
+                cell.fill = hfill
+                cell.alignment = Alignment(horizontal="center")
+            for col in ws.columns:
+                w = max((len(str(c.value)) for c in col if c.value), default=10)
+                ws.column_dimensions[col[0].column_letter].width = w + 4
+
+    output.seek(0)
+    return output.read()
+
+col_dl1, col_dl2 = st.columns([2, 3])
+with col_dl1:
+    dl_tickers = st.multiselect(
+        "ETFs to include in export",
+        options=selected_etfs,
+        default=selected_etfs,
+        key="dl_tickers"
+    )
+with col_dl2:
+    st.markdown("<br>", unsafe_allow_html=True)
+    if dl_tickers:
+        valid = [tk for tk in dl_tickers if tk in closes.columns]
+        if valid:
+            export_df = closes[valid].dropna(how='all')
+            excel_bytes = build_excel(export_df, valid)
+            fname = f"sector_etf_{selected_period}_{date.today().strftime('%Y%m%d')}.xlsx"
+            st.download_button(
+                label="⬇️ Download Excel (.xlsx)",
+                data=excel_bytes,
+                file_name=fname,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+    else:
+        st.info("Select at least one ETF above to enable download.")
+
+st.caption("File includes 4 sheets: Daily Prices · Daily $ Change · Daily % Change · Combined")
 
 # ── Footer ───────────────────────────────────────────────────────────────────
 st.markdown("---")
